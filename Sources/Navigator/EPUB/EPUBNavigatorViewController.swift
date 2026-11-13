@@ -922,12 +922,11 @@ open class EPUBNavigatorViewController: InputObservableViewController,
     /// Applies user settings that require native configuration instead of
     /// CSS properties.
     private func applySettings() {
-        guard isViewLoaded else {
-            return
-        }
-
-        view.backgroundColor = settings.effectiveBackgroundColor.uiColor
+        viewIfLoaded?.backgroundColor = settings.effectiveBackgroundColor.uiColor
         paginationView?.isScrollEnabled = isPaginationViewScrollingEnabled
+        for (_, view) in paginationView?.loadedViews ?? [:] {
+            (view as? EPUBReflowableSpreadView)?.applySettings()
+        }
     }
 
     // MARK: - EPUB-specific extensions
@@ -974,6 +973,7 @@ extension EPUBNavigatorViewController: EPUBNavigatorViewModelDelegate {
     }
 
     func epubNavigatorViewModel(_ viewModel: EPUBNavigatorViewModel, runScript script: String, in scope: EPUBScriptScope) {
+        applySettings()
         Task {
             await initialized()
 

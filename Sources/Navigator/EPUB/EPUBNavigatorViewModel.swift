@@ -224,7 +224,7 @@ enum EPUBScriptScope {
             oldSettings.readingProgression != newSettings.readingProgression
                 || oldSettings.language != newSettings.language
                 || oldSettings.verticalText != newSettings.verticalText
-                || oldSettings.scroll != newSettings.scroll
+                || (publication.metadata.epubLayout == .fixed && oldSettings.scroll != newSettings.scroll)
                 || oldSettings.spread != newSettings.spread
                 || oldSettings.fit != newSettings.fit
                 || oldSettings.offsetFirstPage != newSettings.offsetFirstPage
@@ -362,18 +362,11 @@ enum EPUBScriptScope {
     }
 
     private func commitCSSChange(from previous: ReadiumCSS, to new: ReadiumCSS) {
-        var properties: [String: String?] = [:]
         let rsProperties = new.rsProperties.cssProperties()
-        if previous.rsProperties.cssProperties() != rsProperties {
-            for (k, v) in rsProperties {
-                properties[k] = v
-            }
-        }
+        var properties = previous.rsProperties.cssProperties() == rsProperties ? [:] : rsProperties
         let userProperties = new.userProperties.cssProperties()
         if previous.userProperties.cssProperties() != userProperties {
-            for (k, v) in userProperties {
-                properties[k] = v
-            }
+            properties.merge(userProperties) { _, value in value }
         }
         if !properties.isEmpty {
             guard
@@ -384,11 +377,14 @@ enum EPUBScriptScope {
                 return
             }
 
-            delegate?.epubNavigatorViewModel(
-                self,
-                runScript: "readium.setCSSProperties(\(json));",
-                in: .loadedResources
-            )
+            var script = "readium.setCSSProperties(\(json));"
+            if previous.userProperties.view != new.userProperties.view {
+                // Restore before scroll events can publish the reflow's clamped position.
+                script = "(function() { const locator = readium.findFirstVisibleLocator(); " + script
+                    + " window.scrollTo({ left: 0, top: 0, behavior: 'instant' });"
+                    + " readium.scrollToLocator(locator, false); })();"
+            }
+            delegate?.epubNavigatorViewModel(self, runScript: script, in: .loadedResources)
         }
     }
 
