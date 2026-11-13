@@ -204,12 +204,12 @@ enum EPUBScriptScope {
     /// Last submitted preferences.
     private var preferences: EPUBPreferences
 
-    func submitPreferences(_ preferences: EPUBPreferences) {
+    func submitPreferences(_ preferences: EPUBPreferences, inPlaceLayout: Bool = false) {
         self.preferences = preferences
-        applyPreferences()
+        applyPreferences(inPlaceLayout: inPlaceLayout)
     }
 
-    private func applyPreferences() {
+    private func applyPreferences(inPlaceLayout: Bool = false) {
         let oldSettings = settings
         let newSettings = EPUBSettings(
             preferences: preferences,
@@ -224,7 +224,7 @@ enum EPUBScriptScope {
             oldSettings.readingProgression != newSettings.readingProgression
                 || oldSettings.language != newSettings.language
                 || oldSettings.verticalText != newSettings.verticalText
-                || (publication.metadata.epubLayout == .fixed && oldSettings.scroll != newSettings.scroll)
+                || (!inPlaceLayout && oldSettings.scroll != newSettings.scroll)
                 || oldSettings.spread != newSettings.spread
                 || oldSettings.fit != newSettings.fit
                 || oldSettings.offsetFirstPage != newSettings.offsetFirstPage
@@ -362,11 +362,18 @@ enum EPUBScriptScope {
     }
 
     private func commitCSSChange(from previous: ReadiumCSS, to new: ReadiumCSS) {
+        var properties: [String: String?] = [:]
         let rsProperties = new.rsProperties.cssProperties()
-        var properties = previous.rsProperties.cssProperties() == rsProperties ? [:] : rsProperties
+        if previous.rsProperties.cssProperties() != rsProperties {
+            for (k, v) in rsProperties {
+                properties[k] = v
+            }
+        }
         let userProperties = new.userProperties.cssProperties()
         if previous.userProperties.cssProperties() != userProperties {
-            properties.merge(userProperties) { _, value in value }
+            for (k, v) in userProperties {
+                properties[k] = v
+            }
         }
         if !properties.isEmpty {
             guard
@@ -377,14 +384,11 @@ enum EPUBScriptScope {
                 return
             }
 
-            var script = "readium.setCSSProperties(\(json));"
-            if previous.userProperties.view != new.userProperties.view {
-                // Restore before scroll events can publish the reflow's clamped position.
-                script = "(function() { const locator = readium.findFirstVisibleLocator(); " + script
-                    + " window.scrollTo({ left: 0, top: 0, behavior: 'instant' });"
-                    + " readium.scrollToLocator(locator, false); })();"
-            }
-            delegate?.epubNavigatorViewModel(self, runScript: script, in: .loadedResources)
+            delegate?.epubNavigatorViewModel(
+                self,
+                runScript: "readium.setCSSProperties(\(json));",
+                in: .loadedResources
+            )
         }
     }
 

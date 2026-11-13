@@ -909,9 +909,23 @@ open class EPUBNavigatorViewController: InputObservableViewController,
     }
 
     public func submitPreferences(_ preferences: EPUBPreferences) {
-        viewModel.submitPreferences(preferences)
-        applySettings()
+        submitPreferences(preferences, inPlaceLayout: false)
+    }
 
+    /// In-place layout requires the caller to restore its authoritative reading location.
+    public func submitPreferences(_ preferences: EPUBPreferences, inPlaceLayout: Bool) {
+        let canReflow = inPlaceLayout && publication.metadata.epubLayout == .reflowable
+        viewModel.submitPreferences(preferences, inPlaceLayout: canReflow)
+        applySettings()
+        if canReflow {
+            for (_, view) in paginationView?.loadedViews ?? [:] {
+                if let spread = view as? EPUBReflowableSpreadView {
+                    spread.applySettings()
+                    spread.layoutIfNeeded()
+                    if !settings.scroll { spread.scrollView.contentOffset.y = 0 }
+                }
+            }
+        }
         delegate?.navigator(self, presentationDidChange: presentation)
     }
 
@@ -922,12 +936,12 @@ open class EPUBNavigatorViewController: InputObservableViewController,
     /// Applies user settings that require native configuration instead of
     /// CSS properties.
     private func applySettings() {
-        viewIfLoaded?.backgroundColor = settings.effectiveBackgroundColor.uiColor
-        paginationView?.isScrollEnabled = isPaginationViewScrollingEnabled
-        for (_, view) in paginationView?.loadedViews ?? [:] {
-            (view as? EPUBReflowableSpreadView)?.applySettings()
-            view.layoutIfNeeded()
+        guard isViewLoaded else {
+            return
         }
+
+        view.backgroundColor = settings.effectiveBackgroundColor.uiColor
+        paginationView?.isScrollEnabled = isPaginationViewScrollingEnabled
     }
 
     // MARK: - EPUB-specific extensions
@@ -974,7 +988,6 @@ extension EPUBNavigatorViewController: EPUBNavigatorViewModelDelegate {
     }
 
     func epubNavigatorViewModel(_ viewModel: EPUBNavigatorViewModel, runScript script: String, in scope: EPUBScriptScope) {
-        applySettings()
         Task {
             await initialized()
 
