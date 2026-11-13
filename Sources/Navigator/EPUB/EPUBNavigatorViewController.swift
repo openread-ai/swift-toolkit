@@ -926,6 +926,7 @@ open class EPUBNavigatorViewController: InputObservableViewController,
         paginationView?.isScrollEnabled = isPaginationViewScrollingEnabled
         for (_, view) in paginationView?.loadedViews ?? [:] {
             (view as? EPUBReflowableSpreadView)?.applySettings()
+            view.layoutIfNeeded()
         }
     }
 
