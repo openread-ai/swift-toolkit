@@ -32,12 +32,8 @@ final class PDFTapGestureController: NSObject {
         tapRecognizer.allowedTouchTypes = touchTypes.map { NSNumber(value: $0.rawValue) }
         tapRecognizer.requiresExclusiveTouchType = true
 
-        // If we add the gesture on the superview on iOS 13, then it will be
-        // triggered when taping a link.
-        //
-        // The delegate will be used to make sure that this recognizer has a
-        // lower precedence over the default tap recognizer of the `PDFView`,
-        // which is used to handle links.
+        // PDFKit recognizes single taps even on blank content. Waiting for its
+        // recognizer to fail prevents navigator input; filter annotations instead.
         tapRecognizer.delegate = self
         pdfView.addGestureRecognizer(tapRecognizer)
     }
@@ -59,7 +55,16 @@ extension PDFTapGestureController: UIGestureRecognizerDelegate {
         true
     }
 
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        // Check before PDFKit can clear selection while recognizing the same tap.
+        guard pdfView.currentSelection == nil else { return false }
+        let point = touch.location(in: pdfView)
+        guard let page = pdfView.page(for: point, nearest: false) else { return true }
+        return page.annotation(at: pdfView.convert(point, to: page)) == nil
+    }
+
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        (otherGestureRecognizer as? UITapGestureRecognizer)?.numberOfTouchesRequired == 1
+        guard let tap = otherGestureRecognizer as? UITapGestureRecognizer else { return false }
+        return tap.numberOfTouchesRequired == 1 && tap.numberOfTapsRequired > 1
     }
 }
